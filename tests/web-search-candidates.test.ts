@@ -89,6 +89,26 @@ describe("webSearchSidecarCandidates = (picker ∪ slots) ∩ active backend", (
     managementRows = [{ provider: "openai", id: "gpt-5.6-terra", disabled: false, native: true }];
     expect(await candidatesFor(config())).toEqual([]);
   });
+
+  test("account-bound selector/slug native rows are excluded (executor cannot run them)", async () => {
+    usableCodexAccounts.add(MAIN_CODEX_ACCOUNT_ID);
+    managementRows = [
+      { provider: "openai", id: "work/gpt-future-unlisted", disabled: false, native: true },
+      { provider: "openai", id: "gpt-5.6-terra", disabled: false, native: true },
+    ];
+    const ids = (await candidatesFor(config())).map(c => c.id).sort();
+    expect(ids).toEqual(["gpt-5.6-luna", "gpt-5.6-terra"]);
+  });
+
+  test("custom openai-keyed rows without the native flag are excluded", async () => {
+    usableCodexAccounts.add(MAIN_CODEX_ACCOUNT_ID);
+    managementRows = [
+      { provider: "openai", id: "my-custom-gpt", disabled: false },
+      { provider: "openai", id: "gpt-5.6-terra", disabled: false, native: true },
+    ];
+    const ids = (await candidatesFor(config())).map(c => c.id).sort();
+    expect(ids).toEqual(["gpt-5.6-luna", "gpt-5.6-terra"]);
+  });
 });
 
 describe("existing contracts stay pinned", () => {

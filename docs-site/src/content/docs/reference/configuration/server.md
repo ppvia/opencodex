@@ -205,7 +205,7 @@ Images API paths and response shape expected by Codex.
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `enabled?` | `boolean` | on when usable | Master switch. |
-| `backend?` | `"openai" \| "anthropic"` | auto | Explicit wins; otherwise usable stored Anthropic OAuth selects `anthropic`, then `openai`. |
+| `backend?` | `"openai" \| "anthropic"` | `openai` | Explicit wins; unset always resolves to `openai`. `anthropic` runs only when explicitly configured. |
 | `model?` | `string` | backend-dependent | `gpt-5.6-luna` for OpenAI or `claude-sonnet-5` for Anthropic. Legacy explicit `gpt-5.4-mini` migrates on start. |
 | `reasoning?` | `string` | `low` | Sidecar effort. `minimal` is rejected with web search. |
 | `maxSearchesPerTurn?` | `number` | `3` | Real searches allowed per main-model turn. |

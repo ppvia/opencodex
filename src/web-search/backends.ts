@@ -32,10 +32,15 @@ export const WEB_SEARCH_BACKENDS: readonly WebSearchBackendDescriptor[] = [
   {
     backend: "openai",
     isActive: auth => auth.isCodexAuth,
-    // The ChatGPT forward executor runs native rows: provider "openai" catalog
-    // rows and the Codex auth slot. Routed providers named openai-* speak the
-    // wire but cannot borrow the hosted web_search execution.
-    eligibleModel: candidate => candidate.provider === "openai",
+    // The ChatGPT forward executor runs BARE native slugs and the Codex auth
+    // slot — settings.model is POSTed verbatim to the forward /responses, so
+    // an account-bound "selector/slug" row (model-rows emits those as
+    // provider "openai", native true) or a custom openai-keyed row would
+    // persist an id the executor cannot run (review F1). The sidecar never
+    // calls routeModel; there is no prefix-stripping on this path.
+    eligibleModel: candidate => candidate.provider === "openai"
+      && (candidate.native === true || candidate.authSlot === true)
+      && !candidate.id.includes("/"),
   },
   {
     backend: "anthropic",
