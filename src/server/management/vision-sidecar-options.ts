@@ -17,7 +17,7 @@ import {
   type VisionSidecarBackend,
 } from "../../vision/eligibility";
 import { listOpenAiForwardSidecarCandidates } from "../../providers/openai-sidecar";
-import { pickerVisibleSidecarCandidates, visionSidecarCandidates } from "../../sidecar/candidates";
+import { pickerVisibleSidecarCandidates } from "../../sidecar/candidates";
 import { resolveSidecarAuth } from "../../sidecar/auth";
 
 /**
@@ -44,14 +44,17 @@ export function enabledVisionBackends(
 
 /**
  * Visible catalog rows in the shape the eligibility predicate consumes.
- * Now sourced from the unified picker set (#2188): picker-visible rows ∪ auth
- * slots, then rule 2 (− provably text-only). The auth slots are what keep a
- * hidden Luna/Haiku offerable for a logged-in side.
+ * Sourced from the unified picker set (#2188): picker-visible rows ∪ auth
+ * slots, UNFILTERED. Rule 2 (− provably text-only) belongs to the OPTIONS
+ * path only (visionEligibleModelOptions already applies it). The PUT gate
+ * consumes this list as EVIDENCE: a picker row proving an id text-only is
+ * exactly what visionDescriberIsProvablyBlind needs to reject that id, so
+ * pre-filtering here would deaden the gate (review F1: reject → allow flip).
  */
 export async function visionCandidateRows(config: OcxConfig): Promise<VisionCandidateModel[]> {
   const auth = resolveSidecarAuth(config);
   const all = await pickerVisibleSidecarCandidates(config, auth);
-  return visionSidecarCandidates(config, all).map(candidate => ({
+  return all.map(candidate => ({
     provider: candidate.provider,
     id: candidate.id,
     ...(candidate.inputModalities ? { inputModalities: candidate.inputModalities } : {}),

@@ -25,6 +25,7 @@ mock.module("../src/server/management/model-rows", () => ({
 
 import { pickerVisibleSidecarCandidates, visionSidecarCandidates } from "../src/sidecar/candidates";
 import { resolveSidecarAuth } from "../src/sidecar/auth";
+import { visionCandidateRows, visionDescriberIsProvablyBlind } from "../src/server/management/vision-sidecar-options";
 import { MAIN_CODEX_ACCOUNT_ID } from "../src/codex/account-id";
 import type { OcxConfig, OcxProviderConfig } from "../src/types";
 
@@ -111,5 +112,20 @@ describe("visionSidecarCandidates (rule 2: − provably text-only)", () => {
     const vision = visionSidecarCandidates(cfg, all);
     expect(vision.map(c => c.id)).not.toContain("gpt-5.6-luna");
     expect(vision.map(c => c.id)).toContain("claude-haiku-4-5");
+  });
+});
+
+describe("write-gate evidence is NOT pre-filtered (review F1 regression)", () => {
+  test("a picker row proving an id text-only still reaches the PUT gate and rejects it", async () => {
+    loginBoth();
+    managementRows = [
+      { provider: "routed", id: "row-proven-blind", disabled: false, inputModalities: ["text"] },
+    ];
+    const cfg = config({ providers: { openai: forward, claude: anthropicOAuth } });
+    const candidates = await visionCandidateRows(cfg);
+    // The evidence row must survive into the candidates list...
+    expect(candidates.map(c => c.id)).toContain("row-proven-blind");
+    // ...so the gate can prove blindness from it (neither vendor table knows this id).
+    expect(visionDescriberIsProvablyBlind(cfg, "row-proven-blind", candidates, undefined)).toBe(true);
   });
 });
