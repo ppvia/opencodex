@@ -71,6 +71,7 @@ export interface SidecarSetting {
   timeoutMs?: number;
 }
 export interface VisionModelOption { value: string; label: string; backend: SidecarBackend; baseline?: boolean }
+export interface WebSearchModelOption { value: string; label: string; authSlot?: boolean }
 export interface SidecarData {
   webSearch: SidecarSetting;
   vision: SidecarSetting;
@@ -78,6 +79,10 @@ export interface SidecarData {
    *  the client falls back to the legacy provider-name list rather than showing
    *  an empty picker. */
   visionModels?: VisionModelOption[];
+  /** Server-computed runnable web-search models (#2188). Same undefined-vs-[]
+   *  contract as visionModels: an older server omits the key and the client
+   *  falls back to the legacy list; a current server's [] means none. */
+  webSearchModels?: WebSearchModelOption[];
 }
 export interface SidecarPatch {
   webSearch?: { backend?: SidecarBackend | null; model?: string; streamRoutedModelOutput?: boolean };
@@ -276,6 +281,31 @@ export function sidecarModelOptions(models: ModelInfo[]) {
     if (model.provider === "openai" || model.provider === "anthropic") {
       out.push({ value: model.id, label: `${model.provider}/${model.id}` });
     }
+  }
+  return out;
+}
+
+/**
+ * Server list when present, else the legacy openai+anthropic list — the same
+ * undefined-vs-[] contract visionModelOptions documents. The persisted model is
+ * grandfathered into the list so the picker can DISPLAY a now-illegal setting;
+ * the server still rejects new writes of it.
+ */
+export function webSearchModelOptionsForPicker(
+  serverOptions: WebSearchModelOption[] | undefined,
+  models: ModelInfo[],
+  current: string | undefined,
+): Array<{ value: string; label: string }> {
+  if (serverOptions === undefined) {
+    const legacy = sidecarModelOptions(models);
+    if (current && !legacy.some(option => option.value === current)) {
+      legacy.unshift({ value: current, label: current });
+    }
+    return legacy;
+  }
+  const out = serverOptions.map(option => ({ value: option.value, label: option.label }));
+  if (current && !out.some(option => option.value === current)) {
+    out.unshift({ value: current, label: current });
   }
   return out;
 }

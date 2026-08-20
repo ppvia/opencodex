@@ -70,6 +70,12 @@ import {
   visionDescriberRejection,
   visionModelOptionsFor,
 } from "./vision-sidecar-options";
+import {
+  webSearchCandidateRows,
+  webSearchModelIsRejected,
+  webSearchModelOptionsFrom,
+  webSearchModelRejection,
+} from "./web-search-sidecar-options";
 import { getDebugLogEntries } from "../../lib/debug-log-buffer";
 import { getInjectionDebugLogEntries } from "../../lib/injection-debug-log";
 import {
@@ -511,6 +517,7 @@ export async function handleConfigRoutes(ctx: ManagementContext): Promise<Respon
   if (url.pathname === "/api/sidecar-settings" && req.method === "GET") {
     const ws = config.webSearchSidecar ?? {};
     const vision = await sidecarVisionResponseSettings(config);
+    const webSearchCandidates = await webSearchCandidateRows(config);
     return jsonResponse({
       webSearch: {
         model: ws.model ?? "gpt-5.6-luna",
@@ -519,6 +526,9 @@ export async function handleConfigRoutes(ctx: ManagementContext): Promise<Respon
       },
       vision: publicVisionSidecarSettings(config, vision),
       visionModels: vision.models,
+      // ALWAYS present: the dashboard treats an omitted list as "no filter" and
+      // falls back to the full model union, so empty must be [] (review B3).
+      webSearchModels: webSearchModelOptionsFrom(config, webSearchCandidates),
     });
   }
 
@@ -600,6 +610,13 @@ export async function handleConfigRoutes(ctx: ManagementContext): Promise<Respon
     }
 
     if (body.webSearch) {
+      if (typeof body.webSearch.model === "string" && body.webSearch.model !== "") {
+        const requested = body.webSearch.model;
+        const candidates = await webSearchCandidateRows(config);
+        if (webSearchModelIsRejected(requested, candidates)) {
+          return jsonResponse(webSearchModelRejection("webSearch.model", requested, candidates), 400);
+        }
+      }
       config.webSearchSidecar = { ...config.webSearchSidecar };
       if (typeof body.webSearch.model === "string") {
         if (body.webSearch.model === "") delete config.webSearchSidecar.model;
