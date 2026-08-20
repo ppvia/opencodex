@@ -21,8 +21,9 @@ ocx agent subagents set ark/model-a,openai/gpt-5.5
 server currently offers for each sidecar — the exact filtered set the dashboard picker shows
 (picker-visible rows plus the login-entitled Luna/Haiku auth slots, intersected with executor
 availability for web search, minus provably text-only models for vision). Writes through
-`--model` go to the same management route as the GUI and are subject to the same gate, so a
-model outside the listed set is refused rather than persisted.
+`--model` go to the same management route as the GUI and are subject to the same per-sidecar
+gate: web search refuses a model outside the listed set (closed membership), while vision
+refuses only a model provably unable to see (unknown ids stay writable).
 
 ```bash
 ocx agent sidecar web --list

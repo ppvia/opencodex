@@ -32,13 +32,27 @@ describe("ocx agent sidecar --list (#2188)", () => {
     try {
       const code = await handleAgentCommand(["sidecar", "web", "--list"], deps);
       expect(code).toBe(0);
-      // Read-only: --list must GET, never PUT.
-      expect(requests.every(r => r.method === "GET")).toBe(true);
+      // Read-only: exactly one GET of the settings route, never a PUT.
+      expect(requests).toHaveLength(1);
+      expect(requests[0]!.method).toBe("GET");
+      expect(requests[0]!.path).toBe("/api/sidecar-settings");
       const out = logSpy.mock.calls.map(call => String(call[0])).join("\n");
       expect(out).toContain("gpt-5.6-luna (auth slot)");
       expect(out).toContain("gpt-5.6-terra");
     } finally {
       logSpy.mockRestore();
+    }
+  });
+
+  test("--list combined with a write flag is a usage error, not a silent ignore", async () => {
+    const { requests, deps } = fakeRuntime();
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const code = await handleAgentCommand(["sidecar", "web", "--list", "--model", "x"], deps);
+      expect(code).toBe(2);
+      expect(requests).toHaveLength(0);
+    } finally {
+      errorSpy.mockRestore();
     }
   });
 
