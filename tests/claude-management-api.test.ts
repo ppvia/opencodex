@@ -421,7 +421,10 @@ test("Claude sidecar overrides round-trip, partially update, clear, and reject u
     expect(loadConfig().claudeCode?.webSearchSidecar).toBeUndefined();
     expect(loadConfig().claudeCode?.visionSidecar).toBeUndefined();
 
-    await put({ webSearchSidecar: { backend: "openai", model: "stable" } });
+    // Auth-slot id: passes the membership gate regardless of login state, so the
+    // known-good snapshot below is real (a non-slot id would silently 400 here).
+    const snapshotPut = await put({ webSearchSidecar: { backend: "openai", model: "gpt-5.6-luna" } });
+    expect(snapshotPut.status).toBe(200);
     const beforeInvalid = loadConfig().claudeCode;
     for (const body of [
       { webSearchSidecar: { backend: "other" } },

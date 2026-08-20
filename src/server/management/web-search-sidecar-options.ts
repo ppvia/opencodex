@@ -14,7 +14,7 @@
  * id outside (candidates ∪ auth slots) can never run and is refused.
  */
 import type { OcxConfig } from "../../types";
-import { resolveSidecarAuth } from "../../sidecar/auth";
+import { AUTH_SLOT_MODELS, resolveSidecarAuth } from "../../sidecar/auth";
 import { pickerVisibleSidecarCandidates, type SidecarCandidate } from "../../sidecar/candidates";
 import { isWebSearchAuthSlotModel, webSearchSidecarCandidates } from "../../web-search/backends";
 
@@ -77,9 +77,13 @@ export function webSearchModelRejection(
   requested: string,
   candidates: readonly SidecarCandidate[],
 ): { error: string; allowedModels: string[] } {
+  const allowed = new Set(candidates.map(candidate => candidate.id));
+  // The gate accepts auth slots unconditionally, so the legal set must list them.
+  allowed.add(AUTH_SLOT_MODELS.codex);
+  allowed.add(AUTH_SLOT_MODELS.anthropic);
   return {
     error: `${field}: "${requested}" is not a web-search sidecar candidate — the model must be ` +
       "picker-visible and runnable by an active executor-backed backend (or an auth-slot model)",
-    allowedModels: candidates.map(candidate => candidate.id).sort(),
+    allowedModels: [...allowed].sort(),
   };
 }

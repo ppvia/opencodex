@@ -662,6 +662,7 @@ export async function handleConfigRoutes(ctx: ManagementContext): Promise<Respon
     saveConfigPreservingClaudeCode(config);
     const ws = config.webSearchSidecar ?? {};
     const vision = await sidecarVisionResponseSettings(config);
+    const savedWebSearchCandidates = await webSearchCandidateRows(config);
     return jsonResponse({
       ok: true,
       webSearch: {
@@ -671,6 +672,10 @@ export async function handleConfigRoutes(ctx: ManagementContext): Promise<Respon
       },
       vision: publicVisionSidecarSettings(config, vision),
       visionModels: vision.models,
+      // Echoed for the same reason GET always carries it: the dashboard rebuilds
+      // its sidecar state from this body, and an omitted key reads as "old
+      // server" and falls back to the full union (review F1).
+      webSearchModels: webSearchModelOptionsFrom(config, savedWebSearchCandidates),
     });
   }
 

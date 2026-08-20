@@ -26,6 +26,8 @@ import {
   webSearchModelOptionsFrom,
   webSearchModelRejection,
 } from "../src/server/management/web-search-sidecar-options";
+import { handleManagementAPI } from "../src/server/management-api";
+import { ManagementRequest as Request } from "./helpers/management-auth";
 import { MAIN_CODEX_ACCOUNT_ID } from "../src/codex/account-id";
 import type { OcxConfig, OcxProviderConfig } from "../src/types";
 
@@ -87,5 +89,58 @@ describe("option list", () => {
     const options = webSearchModelOptionsFrom(cfg, await webSearchCandidateRows(cfg));
     expect(options.map(o => o.value)).toEqual(["claude-haiku-4-5", "gpt-5.6-luna", "gpt-5.6-terra"]);
     expect(options.find(o => o.value === "gpt-5.6-luna")?.authSlot).toBe(true);
+  });
+});
+
+async function sidecarSettings(config: OcxConfig, init?: { method: string; body: unknown }): Promise<Response> {
+  const url = new URL("http://localhost/api/sidecar-settings");
+  const request = init
+    ? new Request(url, { method: init.method, headers: { "content-type": "application/json" }, body: JSON.stringify(init.body) })
+    : new Request(url);
+  const response = await handleManagementAPI(request, url, config);
+  if (!response) throw new Error("sidecar settings route did not handle the request");
+  return response;
+}
+
+describe("HTTP contract on /api/sidecar-settings", () => {
+  test("GET always carries webSearchModels — [] when nothing is runnable", async () => {
+    const body = await (await sidecarSettings(config())).json() as { webSearchModels: unknown };
+    expect(body.webSearchModels).toEqual([]);
+  });
+
+  test("PUT rejects a non-candidate with 400 and does not persist it", async () => {
+    usableCodexAccounts.add(MAIN_CODEX_ACCOUNT_ID);
+    managementRows = [{ provider: "openai", id: "gpt-5.6-terra", disabled: false, native: true }];
+    const cfg = config();
+    const response = await sidecarSettings(cfg, { method: "PUT", body: { webSearch: { model: "o3-mini" } } });
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: string }).error).toContain("web-search sidecar candidate");
+    expect(cfg.webSearchSidecar?.model).toBeUndefined();
+  });
+
+  test("PUT accepts a runnable candidate and ECHOES webSearchModels (GUI rebuilds from this body)", async () => {
+    usableCodexAccounts.add(MAIN_CODEX_ACCOUNT_ID);
+    managementRows = [{ provider: "openai", id: "gpt-5.6-terra", disabled: false, native: true }];
+    const cfg = config();
+    const response = await sidecarSettings(cfg, { method: "PUT", body: { webSearch: { model: "gpt-5.6-terra" } } });
+    expect(response.status).toBe(200);
+    const body = await response.json() as { webSearch: { model: string }; webSearchModels: Array<{ value: string }> };
+    expect(body.webSearch.model).toBe("gpt-5.6-terra");
+    expect(Array.isArray(body.webSearchModels)).toBe(true);
+    expect(body.webSearchModels.map(o => o.value)).toContain("gpt-5.6-terra");
+  });
+
+  test("PUT with empty string clears the model without hitting the gate", async () => {
+    const cfg = config({ webSearchSidecar: { model: "legacy-model" } });
+    const response = await sidecarSettings(cfg, { method: "PUT", body: { webSearch: { model: "" } } });
+    expect(response.status).toBe(200);
+    expect(cfg.webSearchSidecar?.model).toBeUndefined();
+  });
+
+  test("rejection body's allowedModels includes the always-legal auth slots", async () => {
+    const candidates = await webSearchCandidateRows(config());
+    const rejection = webSearchModelRejection("webSearch.model", "o3-mini", candidates);
+    expect(rejection.allowedModels).toContain("gpt-5.6-luna");
+    expect(rejection.allowedModels).toContain("claude-haiku-4-5");
   });
 });
