@@ -13,6 +13,58 @@ import { handleProviderRuntimeCommand } from "../src/cli/provider-runtime";
 type Recorded = { path: string; method: string; body: unknown };
 const servers: Array<ReturnType<typeof Bun.serve>> = [];
 
+describe("ocx agent sidecar --list (#2188)", () => {
+  test("web --list prints the server's webSearchModels — the GUI's exact list", async () => {
+    const { requests, deps } = fakeRuntime(req => {
+      const url = new URL(req.url);
+      if (url.pathname === "/api/sidecar-settings" && req.method === "GET") {
+        return {
+          webSearchModels: [
+            { value: "gpt-5.6-luna", label: "gpt-5.6-luna", authSlot: true },
+            { value: "gpt-5.6-terra", label: "gpt-5.6-terra" },
+          ],
+          visionModels: [],
+        };
+      }
+      return undefined;
+    });
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const code = await handleAgentCommand(["sidecar", "web", "--list"], deps);
+      expect(code).toBe(0);
+      // Read-only: --list must GET, never PUT.
+      expect(requests.every(r => r.method === "GET")).toBe(true);
+      const out = logSpy.mock.calls.map(call => String(call[0])).join("\n");
+      expect(out).toContain("gpt-5.6-luna (auth slot)");
+      expect(out).toContain("gpt-5.6-terra");
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("vision --list prints visionModels with backend tags; empty set names the reason", async () => {
+    const { deps } = fakeRuntime(req => {
+      const url = new URL(req.url);
+      if (url.pathname === "/api/sidecar-settings" && req.method === "GET") {
+        return { webSearchModels: [], visionModels: [{ value: "claude-haiku-4-5", label: "claude-haiku-4-5", backend: "anthropic", baseline: true }] };
+      }
+      return undefined;
+    });
+    const logSpy = spyOn(console, "log").mockImplementation(() => {});
+    try {
+      expect(await handleAgentCommand(["sidecar", "vision", "--list"], deps)).toBe(0);
+      const visionOut = logSpy.mock.calls.map(call => String(call[0])).join("\n");
+      expect(visionOut).toContain("claude-haiku-4-5 [anthropic] (baseline)");
+      logSpy.mockClear();
+      expect(await handleAgentCommand(["sidecar", "web", "--list"], deps)).toBe(0);
+      const webOut = logSpy.mock.calls.map(call => String(call[0])).join("\n");
+      expect(webOut).toContain("no runnable web-search sidecar models");
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
 afterEach(() => {
   for (const server of servers.splice(0)) server.stop(true);
   process.exitCode = 0;
