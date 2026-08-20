@@ -17,7 +17,8 @@ import {
   type VisionSidecarBackend,
 } from "../../vision/eligibility";
 import { listOpenAiForwardSidecarCandidates } from "../../providers/openai-sidecar";
-import { listManagementModelRows } from "./model-rows";
+import { pickerVisibleSidecarCandidates, visionSidecarCandidates } from "../../sidecar/candidates";
+import { resolveSidecarAuth } from "../../sidecar/auth";
 
 /**
  * Backends whose executor could actually run: openai forward, anthropic OAuth.
@@ -41,17 +42,20 @@ export function enabledVisionBackends(
   return backends.length > 0 ? backends : ["openai", "anthropic"];
 }
 
-/** Visible catalog rows in the shape the eligibility predicate consumes. */
+/**
+ * Visible catalog rows in the shape the eligibility predicate consumes.
+ * Now sourced from the unified picker set (#2188): picker-visible rows ∪ auth
+ * slots, then rule 2 (− provably text-only). The auth slots are what keep a
+ * hidden Luna/Haiku offerable for a logged-in side.
+ */
 export async function visionCandidateRows(config: OcxConfig): Promise<VisionCandidateModel[]> {
-  let rows: Awaited<ReturnType<typeof listManagementModelRows>> = [];
-  // A catalog outage must not 500 the settings route nor reject a write; with []
-  // the option list degrades to the baselines, which is the intended floor.
-  try { rows = await listManagementModelRows(config); } catch { rows = []; }
-  return rows.filter(row => row.disabled !== true).map(row => ({
-    provider: row.provider,
-    id: row.id,
-    ...(row.inputModalities ? { inputModalities: row.inputModalities } : {}),
-    ...(row.native ? { native: true } : {}),
+  const auth = resolveSidecarAuth(config);
+  const all = await pickerVisibleSidecarCandidates(config, auth);
+  return visionSidecarCandidates(config, all).map(candidate => ({
+    provider: candidate.provider,
+    id: candidate.id,
+    ...(candidate.inputModalities ? { inputModalities: candidate.inputModalities } : {}),
+    ...(candidate.native ? { native: true } : {}),
   }));
 }
 
